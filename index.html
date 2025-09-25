@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo List</title>
+    
+    <!-- Bootstrap v5.3 CSS -->
+    <link href="/assets/vendor/bootstrap-5.3.7/package/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="/assets/vendor/bootstrap-icons-1.13.1/package/font/bootstrap-icons.min.css" rel="stylesheet">
+    <!-- SortableJS for drag and drop functionality -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+</head>
+<body class="bg-light">
+    <div class="container-fluid py-4" style="max-width: 800px;">
+        <div class="card shadow-lg border-0">
+            <div class="card-body p-4 p-md-5">
+                <!-- ================================================
+                     HEADER SECTION
+                ================================================ -->
+                <div class="text-center mb-4 mb-md-5">
+                    <h1 class="display-5 fw-bold text-primary mb-2">Todo List</h1>
+                    <p class="text-muted fs-5 mb-0">Atur semua rencanamu di satu tempat</p>
+                    <hr class="mx-auto mt-3" style="width: 60px; height: 3px; background: linear-gradient(90deg, #0d6efd, #6f42c1);">
+                </div>
+
+                <!-- ================================================
+                     FILTER BUTTONS WITH COUNTERS
+                ================================================ -->
+                <div class="d-flex justify-content-center justify-content-md-end mb-3">
+                    <div class="btn-group" role="group" aria-label="Filter todos">
+                        <input type="radio" class="btn-check" name="filter" id="filter-all" data-filter="all" checked>
+                        <label class="btn btn-outline-primary" for="filter-all">
+                            Semua 
+                            <span class="badge bg-secondary ms-1" id="count-all">0</span>
+                        </label>
+
+                        <input type="radio" class="btn-check" name="filter" id="filter-incomplete" data-filter="incomplete">
+                        <label class="btn btn-outline-primary" for="filter-incomplete">
+                            Belum Selesai 
+                            <span class="badge bg-warning ms-1" id="count-incomplete">0</span>
+                        </label>
+
+                        <input type="radio" class="btn-check" name="filter" id="filter-completed" data-filter="completed">
+                        <label class="btn btn-outline-primary" for="filter-completed">
+                            Selesai 
+                            <span class="badge bg-success ms-1" id="count-completed">0</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- ================================================
+                     SEARCH INPUT
+                ================================================ -->
+                <div class="position-relative mb-4">
+                    <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"></i>
+                    <input type="text" 
+                           id="searchInput" 
+                           class="form-control form-control-lg bg-light border-0 rounded-pill ps-5" 
+                           placeholder="Cari todo...">
+                </div>
+
+                <!-- ================================================
+                     TODO LIST
+                ================================================ -->
+                <div class="mb-4">
+                    <ul class="list-group list-group-flush" id="todoList">
+                        <!-- Todo items will be dynamically inserted here -->
+                    </ul>
+                </div>
+
+                <!-- ================================================
+                     ADD TODO FORM
+                ================================================ -->
+                <div class="card bg-light border-0">
+                    <div class="card-body">
+                        <form id="addTodoForm">
+                            <div class="input-group input-group-lg">
+                                <input type="text" 
+                                       class="form-control border-0 rounded-start-pill" 
+                                       name="todoText" 
+                                       placeholder="Apa rencana kamu selanjutnya?" 
+                                       required>
+                                <button type="submit" class="btn btn-primary px-4 rounded-end-pill">
+                                    <i class="bi bi-plus-lg me-1"></i> Tambah
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        /**
+         * ================================================
+         * TODO LIST APPLICATION - PURE BOOTSTRAP VERSION
+         * ================================================
+         * 
+         * A comprehensive todo list application using only Bootstrap classes
+         * Features:
+         * - Add, edit, delete todos
+         * - Mark todos as complete/incomplete  
+         * - Filter todos (all, incomplete, completed)
+         * - Search functionality
+         * - Drag and drop reordering
+         * - Local storage persistence
+         * - Fully responsive design with Bootstrap only
+         */
+
+        // ================================================
+        // APPLICATION STATE
+        // ================================================
+        
+        /**
+         * Main application state object
+         */
+        const AppState = {
+            todos: [],                    // Array of todo objects
+            currentFilter: 'all',         // Current filter: 'all', 'incomplete', 'completed'
+            searchTerm: '',               // Current search term
+            nextId: 1                     // Next available ID for new todos
+        };
+
+        /**
+         * Configuration constants
+         */
+        const CONFIG = {
+            STORAGE_KEY: 'todoApp_todos',
+            FILTERS: {
+                ALL: 'all',
+                INCOMPLETE: 'incomplete', 
+                COMPLETED: 'completed'
+            }
+        };
+
+        // ================================================
+        // DOM ELEMENT REFERENCES
+        // ================================================
+        
+        /**
+         * Cache DOM elements for better performance
+         */
+        const DOM = {
+            todoList: null,
+            searchInput: null,
+            addTodoForm: null,
+            filterInputs: null,
+            sortableInstance: null,
+            // Counter elements
+            countAll: null,
+            countIncomplete: null,
+            countCompleted: null
+        };
+
+        // ================================================
+        // UTILITY FUNCTIONS
+        // ================================================
+
+        /**
+         * Generate unique ID for new todos
+         * @returns {number} Unique ID
+         */
+        function generateId() {
+            return AppState.nextId++;
+        }
+
+        /**
+         * Sanitize HTML to prevent XSS attacks
+         * @param {string} text - Text to sanitize
+         * @returns {string} Sanitized text
+         */
+        function sanitizeHTML(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        /**
+         * Show user notification using Bootstrap toast
+         * @param {string} message - Message to show
+         * @param {string} type - Type of notification (success, danger, warning, info)
+         */
+        function showNotification(message, type = 'info') {
+            // Simple alert for now - could be enhanced with Bootstrap toasts
+            alert(message);
+        }
+
+        /**
+         * Debounce function to limit function calls
+         * @param {Function} func - Function to debounce
+         * @param {number} delay - Delay in milliseconds
+         * @returns {Function} Debounced function
+         */
+        function debounce(func, delay) {
+            let timeoutId;
+            return function (...args) {
+                clearTimeout(timeoutId);
+                timeoutId = setTimeout(() => func.apply(this, args), delay);
+            };
+        }
+
+        // ================================================
+        // LOCAL STORAGE OPERATIONS
+        // ================================================
+
+        /**
+         * Save todos to localStorage
+         */
+        function saveTodosToStorage() {
+            try {
+                const dataToSave = {
+                    todos: AppState.todos,
+                    nextId: AppState.nextId
+                };
+                localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(dataToSave));
+            } catch (error) {
+                console.error('Failed to save todos to localStorage:', error);
+                showNotification('Gagal menyimpan data. Pastikan penyimpanan lokal tersedia.', 'danger');
+            }
+        }
+
+        /**
+         * Load todos from localStorage
+         */
+        function loadTodosFromStorage() {
+            try {
+                const stored = localStorage.getItem(CONFIG.STORAGE_KEY);
+                if (stored) {
+                    const data = JSON.parse(stored);
+                    AppState.todos = data.todos || [];
+                    AppState.nextId = data.nextId || 1;
+                }
+            } catch (error) {
+                console.error('Failed to load todos from localStorage:', error);
+                showNotification('Gagal memuat data tersimpan.', 'warning');
+                AppState.todos = [];
+                AppState.nextId = 1;
+            }
+        }
+
+        // ================================================
+        // TODO OPERATIONS
+        // ================================================
+
+        /**
+         * Create a new todo object
+         * @param {string} text - Todo text
+         * @returns {Object} New todo object
+         */
+        function createTodo(text) {
+            return {
+                id: generateId(),
+                text: text.trim(),
+                completed: false,
+                createdAt: new Date().toISOString()
+            };
+        }
+
+        /**
+         * Add a new todo
+         * @param {string} text - Todo text
+         * @returns {boolean} Success status
+         */
+        function addTodo(text) {
+            const trimmedText = text.trim();
+            
+            // Validate input
+            if (!trimmedText) {
+                showNotification('Todo tidak boleh kosong!', 'danger');
+                return false;
+            }
+
+            // Check for duplicates (case-insensitive)
+            const isDuplicate = AppState.todos.some(
+                todo => todo.text.toLowerCase() === trimmedText.toLowerCase()
+            );
+
+            if (isDuplicate) {
+                showNotification('Todo dengan judul yang sama sudah ada!', 'danger');
+                return false;
+            }
+
+            // Add todo to beginning of array
+            const newTodo = createTodo(trimmedText);
+            AppState.todos.unshift(newTodo);
+            
+            saveTodosToStorage();
+            return true;
+        }
+
+        /**
+         * Update a todo's text
+         * @param {number} id - Todo ID
+         * @param {string} newText - New text
+         * @returns {boolean} Success status
+         */
+        function updateTodo(id, newText) {
+            const trimmedText = newText.trim();
+            
+            if (!trimmedText) {
+                showNotification('Todo tidak boleh kosong!', 'danger');
+                return false;
+            }
+
+            const todo = AppState.todos.find(t => t.id === id);
+            if (!todo) {
+                showNotification('Todo tidak ditemukan!', 'danger');
+                return false;
+            }
+
+            // Check for duplicates (exclude current todo)
+            const isDuplicate = AppState.todos.some(
+                t => t.id !== id && t.text.toLowerCase() === trimmedText.toLowerCase()
+            );
+
+            if (isDuplicate) {
+                showNotification('Todo dengan judul yang sama sudah ada!', 'danger');
+                return false;
+            }
+
+            todo.text = trimmedText;
+            saveTodosToStorage();
+            return true;
+        }
+
+        /**
+         * Toggle todo completion status
+         * @param {number} id - Todo ID
+         */
+        function toggleTodoCompletion(id) {
+            const todo = AppState.todos.find(t => t.id === id);
+            if (todo) {
+                todo.completed = !todo.completed;
+                saveTodosToStorage();
+            }
+        }
+
+        /**
+         * Delete a todo
+         * @param {number} id - Todo ID
+         * @returns {boolean} Success status
+         */
+        function deleteTodo(id) {
+            const index = AppState.todos.findIndex(t => t.id === id);
+            if (index !== -1) {
+                AppState.todos.splice(index, 1);
+                saveTodosToStorage();
+                return true;
+            }
+            return false;
+        }
+
+        /**
+         * Reorder todos after drag and drop
+         * @param {Array} newOrderIds - Array of IDs in new order
+         */
+        function reorderTodos(newOrderIds) {
+            AppState.todos.sort((a, b) => {
+                return newOrderIds.indexOf(a.id) - newOrderIds.indexOf(b.id);
+            });
+            saveTodosToStorage();
+        }
+
+        // ================================================
+        // FILTERING AND SEARCHING
+        // ================================================
+
+        /**
+         * Filter todos based on current filter and search term
+         * @returns {Array} Filtered todos
+         */
+        function getFilteredTodos() {
+            return AppState.todos
+                .filter(todo => {
+                    // Apply completion filter
+                    switch (AppState.currentFilter) {
+                        case CONFIG.FILTERS.COMPLETED:
+                            return todo.completed;
+                        case CONFIG.FILTERS.INCOMPLETE:
+                            return !todo.completed;
+                        default:
+                            return true;
+                    }
+                })
+                .filter(todo => {
+                    // Apply search filter
+                    return todo.text.toLowerCase().includes(AppState.searchTerm.toLowerCase());
+                });
+        }
+
+        // ================================================
+        // DOM MANIPULATION
+        // ================================================
+
+        /**
+         * Create empty state element using Bootstrap classes
+         * @returns {HTMLElement} Empty state element
+         */
+        function createEmptyState() {
+            const emptyState = document.createElement('div');
+            emptyState.className = 'text-center py-5 text-muted';
+            emptyState.innerHTML = `
+                <i class="bi bi-clipboard-check display-1 mb-3"></i>
+                <h5 class="fw-semibold text-secondary">Belum ada todo</h5>
+                <p class="mb-0">Tambahkan todo baru untuk memulai!</p>
+            `;
+            return emptyState;
+        }
+
+        /**
+         * Create todo item element using Bootstrap classes
+         * @param {Object} todo - Todo object
+         * @returns {HTMLElement} Todo item element
+         */
+        function createTodoElement(todo) {
+            const li = document.createElement('li');
+            li.className = `list-group-item d-flex align-items-center border-0 border-bottom py-3 ${todo.completed ? 'bg-light' : 'bg-white'}`;
+            li.dataset.id = todo.id;
+
+            li.innerHTML = `
+                <i class="bi bi-grip-vertical text-muted me-3 fs-5" style="cursor: grab;" title="Drag untuk mengubah urutan"></i>
+                <div class="form-check me-3">
+                    <input class="form-check-input" type="checkbox" ${todo.completed ? 'checked' : ''} id="todo-${todo.id}">
+                    <label class="form-check-label ${todo.completed ? 'text-decoration-line-through text-muted' : ''}" for="todo-${todo.id}">
+                        ${sanitizeHTML(todo.text)}
+                    </label>
+                </div>
+                <div class="ms-auto">
+                    <button class="btn btn-sm btn-outline-warning me-2 edit-btn" type="button" title="Edit todo">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger delete-btn" type="button" title="Hapus todo">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            `;
+
+            // Add event listeners
+            const checkbox = li.querySelector('.form-check-input');
+            const label = li.querySelector('.form-check-label');
+            const editBtn = li.querySelector('.edit-btn');
+            const deleteBtn = li.querySelector('.delete-btn');
+
+            checkbox.addEventListener('change', () => {
+                toggleTodoCompletion(todo.id);
+                
+                // Update visual state using Bootstrap classes
+                if (checkbox.checked) {
+                    li.classList.add('bg-light');
+                    li.classList.remove('bg-white');
+                    label.classList.add('text-decoration-line-through', 'text-muted');
+                } else {
+                    li.classList.add('bg-white');
+                    li.classList.remove('bg-light');
+                    label.classList.remove('text-decoration-line-through', 'text-muted');
+                }
+            });
+
+            editBtn.addEventListener('click', () => handleEditTodo(todo.id));
+            deleteBtn.addEventListener('click', () => handleDeleteTodo(todo.id));
+
+            return li;
+        }
+
+        /**
+         * Render todos to DOM and update counters
+         */
+        function renderTodos() {
+            const filteredTodos = getFilteredTodos();
+            
+            // Clear existing content
+            DOM.todoList.innerHTML = '';
+
+            // Update filter counters
+            updateFilterCounters();
+
+            // Show empty state if no todos
+            if (filteredTodos.length === 0) {
+                DOM.todoList.appendChild(createEmptyState());
+                return;
+            }
+
+            // Create and append todo elements
+            filteredTodos.forEach(todo => {
+                const todoElement = createTodoElement(todo);
+                DOM.todoList.appendChild(todoElement);
+            });
+
+            // Update sortable state
+            updateSortableState();
+        }
+
+        /**
+         * Update filter counters with current todo counts
+         */
+        function updateFilterCounters() {
+            const allCount = AppState.todos.length;
+            const completedCount = AppState.todos.filter(todo => todo.completed).length;
+            const incompleteCount = allCount - completedCount;
+
+            // Update counter badges
+            if (DOM.countAll) DOM.countAll.textContent = allCount;
+            if (DOM.countIncomplete) DOM.countIncomplete.textContent = incompleteCount;
+            if (DOM.countCompleted) DOM.countCompleted.textContent = completedCount;
+
+            // Update badge colors based on count
+            updateBadgeStyles(DOM.countAll, allCount);
+            updateBadgeStyles(DOM.countIncomplete, incompleteCount);
+            updateBadgeStyles(DOM.countCompleted, completedCount);
+        }
+
+        /**
+         * Update badge styles based on count value
+         * @param {HTMLElement} badge - Badge element
+         * @param {number} count - Count value
+         */
+        function updateBadgeStyles(badge, count) {
+            if (!badge) return;
+            
+            // Remove existing badge classes
+            badge.classList.remove('bg-secondary', 'bg-light', 'text-dark');
+            
+            // Apply appropriate style based on count
+            if (count === 0) {
+                badge.classList.add('bg-light', 'text-dark');
+            } else {
+                // Keep original color classes for non-zero counts
+                if (badge.id === 'count-all') badge.classList.add('bg-secondary');
+                else if (badge.id === 'count-incomplete') badge.classList.add('bg-warning');
+                else if (badge.id === 'count-completed') badge.classList.add('bg-success');
+            }
+        }
+        function updateSortableState() {
+            if (DOM.sortableInstance) {
+                // Disable sorting when filtering (not showing all todos)
+                DOM.sortableInstance.option('disabled', AppState.currentFilter !== CONFIG.FILTERS.ALL);
+            }
+        }
+
+        // ================================================
+        // EVENT HANDLERS
+        // ================================================
+
+        /**
+         * Handle add todo form submission
+         * @param {Event} event - Form submit event
+         */
+        function handleAddTodo(event) {
+            event.preventDefault();
+            
+            const formData = new FormData(event.target);
+            const todoText = formData.get('todoText');
+            
+            if (addTodo(todoText)) {
+                event.target.reset(); // Clear form
+                renderTodos();
+            }
+        }
+
+        /**
+         * Handle filter change
+         * @param {Event} event - Change event
+         */
+        function handleFilterChange(event) {
+            const newFilter = event.target.dataset.filter;
+            if (newFilter && newFilter !== AppState.currentFilter) {
+                AppState.currentFilter = newFilter;
+                renderTodos();
+            }
+        }
+
+        /**
+         * Handle search input change
+         * @param {Event} event - Input event
+         */
+        function handleSearchInput(event) {
+            AppState.searchTerm = event.target.value;
+            renderTodos();
+        }
+
+        /**
+         * Handle edit todo
+         * @param {number} todoId - ID of todo to edit
+         */
+        function handleEditTodo(todoId) {
+            const todo = AppState.todos.find(t => t.id === todoId);
+            if (!todo) return;
+
+            const newText = prompt('Ubah todo:', todo.text);
+            
+            // Check if user cancelled or entered empty string
+            if (newText === null) return;
+            
+            if (updateTodo(todoId, newText)) {
+                renderTodos();
+            }
+        }
+
+        /**
+         * Handle delete todo
+         * @param {number} todoId - ID of todo to delete
+         */
+        function handleDeleteTodo(todoId) {
+            const todo = AppState.todos.find(t => t.id === todoId);
+            if (!todo) return;
+
+            if (confirm('Yakin ingin menghapus todo ini?')) {
+                if (deleteTodo(todoId)) {
+                    renderTodos();
+                }
+            }
+        }
+
+        /**
+         * Handle drag and drop reordering
+         * @param {Event} event - Sortable end event
+         */
+        function handleTodoReorder(event) {
+            // Get all item elements in new order
+            const items = DOM.todoList.querySelectorAll('[data-id]');
+            const newOrderIds = Array.from(items).map(item => parseInt(item.dataset.id));
+            
+            // Update todos array order
+            reorderTodos(newOrderIds);
+        }
+
+        /**
+         * Handle page unload - save data
+         */
+        function handlePageUnload() {
+            saveTodosToStorage();
+        }
+
+        // ================================================
+        // INITIALIZATION
+        // ================================================
+
+        /**
+         * Initialize DOM element references
+         */
+        function initializeDOMReferences() {
+            DOM.todoList = document.getElementById('todoList');
+            DOM.searchInput = document.getElementById('searchInput');
+            DOM.addTodoForm = document.getElementById('addTodoForm');
+            DOM.filterInputs = document.querySelectorAll('input[name="filter"]');
+            
+            // Counter elements
+            DOM.countAll = document.getElementById('count-all');
+            DOM.countIncomplete = document.getElementById('count-incomplete');
+            DOM.countCompleted = document.getElementById('count-completed');
+
+            // Validate that all required elements exist
+            if (!DOM.todoList || !DOM.searchInput || !DOM.addTodoForm) {
+                throw new Error('Required DOM elements not found');
+            }
+        }
+
+        /**
+         * Initialize sortable functionality
+         */
+        function initializeSortable() {
+            DOM.sortableInstance = new Sortable(DOM.todoList, {
+                animation: 150,
+                ghostClass: 'opacity-50',
+                handle: '.bi-grip-vertical',
+                onEnd: handleTodoReorder
+            });
+        }
+
+        /**
+         * Initialize event listeners
+         */
+        function initializeEventListeners() {
+            // Form submission
+            DOM.addTodoForm.addEventListener('submit', handleAddTodo);
+
+            // Filter radio buttons
+            DOM.filterInputs.forEach(input => {
+                input.addEventListener('change', handleFilterChange);
+            });
+
+            // Search input with debouncing
+            const debouncedSearch = debounce(handleSearchInput, 300);
+            DOM.searchInput.addEventListener('input', debouncedSearch);
+
+            // Page unload
+            window.addEventListener('beforeunload', handlePageUnload);
+
+            // Handle page visibility change to save data
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    saveTodosToStorage();
+                }
+            });
+        }
+
+        /**
+         * Initialize application state
+         */
+        function initializeAppState() {
+            loadTodosFromStorage();
+            
+            // Set next ID to be higher than any existing ID
+            if (AppState.todos.length > 0) {
+                const maxId = Math.max(...AppState.todos.map(todo => todo.id));
+                AppState.nextId = maxId + 1;
+            }
+        }
+
+        /**
+         * Initial render of the application
+         */
+        function initialRender() {
+            renderTodos();
+        }
+
+        /**
+         * Main application initialization
+         */
+        function initializeApp() {
+            try {
+                initializeDOMReferences();
+                initializeAppState();
+                initializeSortable();
+                initializeEventListeners();
+                initialRender();
+                
+                console.log('Todo App initialized successfully - Pure Bootstrap version');
+            } catch (error) {
+                console.error('Failed to initialize Todo App:', error);
+                showNotification('Terjadi kesalahan saat memuat aplikasi.', 'danger');
+            }
+        }
+
+        // ================================================
+        // APPLICATION STARTUP
+        // ================================================
+
+        /**
+         * Start the application when DOM is ready
+         */
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+    </script>
+</body>
+</html>
