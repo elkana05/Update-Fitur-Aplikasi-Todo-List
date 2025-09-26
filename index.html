@@ -18,28 +18,28 @@
     <!-- SortableJS for drag and drop functionality -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
   </head>
-  <body class="bg-light">
+  <body class="bg-primary-subtle">
     <div class="container-fluid py-4" style="max-width: 800px">
       <div class="card shadow-lg border-0">
-        <div class="card-body p-4 p-md-5">
-          <!-- ================================================
+        <!-- ================================================
                      HEADER SECTION
                 ================================================ -->
-          <div class="text-center mb-4 mb-md-5">
-            <h1 class="display-5 fw-bold text-primary mb-2">Todo List</h1>
-            <p class="text-muted fs-5 mb-0">
+        <div
+          class="card-header p-4 p-md-5 border-0 text-white"
+          style="
+            background: linear-gradient(45deg, #0d6efd, #6f42c1);
+            border-radius: var(--bs-card-inner-border-radius)
+              var(--bs-card-inner-border-radius) 0 0;
+          "
+        >
+          <div class="text-center">
+            <h1 class="display-5 fw-bold mb-2">Todo List</h1>
+            <p class="fs-5 mb-0 opacity-75">
               Atur semua rencanamu di satu tempat
             </p>
-            <hr
-              class="mx-auto mt-3"
-              style="
-                width: 60px;
-                height: 3px;
-                background: linear-gradient(90deg, #0d6efd, #6f42c1);
-              "
-            />
           </div>
-
+        </div>
+        <div class="card-body p-4 p-md-5">
           <!-- ================================================
                      FILTER BUTTONS WITH COUNTERS
                 ================================================ -->
